@@ -58,7 +58,7 @@ func (c *Camera) VP() mat4.Mat4 {
 
   var near float32 = 1
   var far float32  = 10
-  var fov float64 =  60
+  var fov float64 =  30
 	projection := mat4.Projection(near,far,fov)
 
   return mat4.Multiply(projection, mat4.Multiply(rot, trans))
