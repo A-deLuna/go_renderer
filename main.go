@@ -6,8 +6,10 @@ import (
   "image"
   "os"
   _ "github.com/ftrvxmtrx/tga"
-  //"fmt"
+  "fmt"
   "github.com/a-deluna/gorenderer/v2/vec3"
+  "github.com/a-deluna/gorenderer/v2/vec4"
+  "github.com/a-deluna/gorenderer/v2/mat4"
 )
 
 var (
@@ -18,9 +20,9 @@ var (
 type Screen struct {
   width int32
   height int32
-  depth uint8
+  depth float32
   framebuffer []Color
-  depthbuffer []byte
+  depthbuffer []float32
 }
 
 type Color struct {
@@ -29,6 +31,7 @@ type Color struct {
   g byte
   r byte
 }
+
 
 type Resources struct {
   obj *obj.Decoder
@@ -80,9 +83,9 @@ func main() {
 	defer texture.Destroy()
 
   bufferSize := width * height * 4
-  screen := Screen{width: width, height: height, depth:255,
+  screen := Screen{width: width, height: height, depth:10000,
   framebuffer: make([]Color, bufferSize),
-  depthbuffer: make([]byte, bufferSize)}
+  depthbuffer: make([]float32, bufferSize)}
 
   for i := int32(0); i < width; i++ {
     base := (i * width * 4) + i * 4
@@ -95,6 +98,9 @@ func main() {
 
 func mainLoop(screen *Screen, resources *Resources,
               renderer *sdl.Renderer, texture *sdl.Texture) {
+
+
+
 	running := true
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -144,10 +150,33 @@ func Draw(screen *Screen, resources *Resources) {
   // Each face consists of 3 vertices
   modelVerts := resources.obj.Vertices
 
+
+  center := vec3.Vec3{0,0,0}
+  cameraPosition := vec3.Vec3{.3, 0, 3}
+
+  camTrans := mat4.Translation(center.Sub(cameraPosition))
+
+  projection := mat4.Projection(1, 50000, 30)
+
+  mvp := mat4.Multiply(projection, camTrans)
+
   for _, face := range mesh.Faces {
     v1 := toVec(modelVerts, face.Vertices[0] * 3)
     v2 := toVec(modelVerts, face.Vertices[1] * 3)
     v3 := toVec(modelVerts, face.Vertices[2] * 3)
+
+    v1_homo := mat4.VectorMultiply(mvp,vec4.FromVec3(v1))
+    v2_homo := mat4.VectorMultiply(mvp,vec4.FromVec3(v2))
+    v3_homo := mat4.VectorMultiply(mvp,vec4.FromVec3(v3))
+
+    if shouldClip(v1_homo, v2_homo, v3_homo) {
+      continue
+    }
+
+    v1 = v1_homo.Wdivide();
+    v2 = v2_homo.Wdivide();
+    v3 = v3_homo.Wdivide();
+
 
     v1Screen := vec3.Vec3{
       (v1[0] + 1.0) * float32(screen.width) / 2.0,
@@ -167,7 +196,6 @@ func Draw(screen *Screen, resources *Resources) {
 
     normal := vec3.Normalize(vec3.Cross(v3.Sub(v1), v2.Sub(v1)))
 
-    //fmt.Printf("Face %d: %v %v %v\n",i, v1,v2,v3)
 
     tex1 := toVec2(resources.obj.Uvs, face.Uvs[0] * 2)
     tex2 := toVec2(resources.obj.Uvs, face.Uvs[1] * 2)
@@ -177,6 +205,19 @@ func Draw(screen *Screen, resources *Resources) {
       resources.image)
 
   }
+}
+
+func shouldClip(vectors... vec4.Vec4) bool {
+  for _, v := range vectors {
+    w := v[3]
+    acceptable := -w <= v[0] && v[0] <= w &&
+                  -w <= v[1] && v[1] <= w &&
+                  -w <= v[2] && v[2] <= w
+   if !acceptable {
+     return true
+   }
+  }
+  return false
 }
 
 type Box struct {
@@ -201,10 +242,11 @@ func drawTriangle(screen *Screen, v1, v2, v3, normal,
           b := baricenter(vec3.Vec3{float32(x),float32(y),1}, v1, v2, v3)
           if pointInTriangle(b) {
             pointz := v1[2] * b[0] + v2[2] * b [1] + v3[2] * b[2]
+            fmt.Printf("pointz: %v\n", pointz)
             depthIndex := int32(x) + int32(y) * screen.width
 
-            if int(pointz) > int(screen.depthbuffer[depthIndex]) {
-              screen.depthbuffer[depthIndex] = byte(pointz)
+            if pointz > screen.depthbuffer[depthIndex] {
+              screen.depthbuffer[depthIndex] = pointz
               textureCoords := vec3.Add(
                vec3.Scale(t1, b[0]),
                vec3.Scale(t2, b[1]),
