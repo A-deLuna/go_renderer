@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	width  int32 = 1200
-	height int32 = 1200
+	width  int32 = 1024
+	height int32 = 1024
 )
 
 type Screen struct {
@@ -96,20 +96,95 @@ func main() {
 }
 
 
+type Input struct {
+  f int
+  h int
+
+  forward KeyState
+  backward KeyState
+  left KeyState
+  right KeyState
+  up KeyState
+  down KeyState
+}
+
+func (i *Input) Init() {
+  i.forward = KeyState{sdl.SCANCODE_W, false}
+  i.backward = KeyState{sdl.SCANCODE_S, false}
+  i.left = KeyState{sdl.SCANCODE_A, false}
+  i.right = KeyState{sdl.SCANCODE_D, false}
+  i.up = KeyState{sdl.SCANCODE_Q, false}
+  i.down = KeyState{sdl.SCANCODE_E, false}
+}
+
+type KeyState struct {
+  scancode sdl.Scancode
+  held bool
+}
+
+type Camera struct {
+  position vec3.Vec3
+  yaw float32
+  pitch float32
+}
+
+func (c *Camera) Init() {
+  c.position = vec3.Vec3{0,0,3}
+}
+
+func (c *Camera) Update(input *Input) {
+  var dx,dy,dz float32
+  if input.forward.held && !input.backward.held {
+    dz = -.3
+  }
+  if !input.forward.held && input.backward.held {
+    dz = .3
+  }
+  if input.left.held && !input.right.held {
+    dx = -.3
+  }
+  if !input.left.held && input.right.held {
+    dx = .3
+  }
+  if !input.up.held && input.down.held {
+    dy = .3
+  }
+  if input.up.held && !input.down.held {
+    dy = -.3
+  }
+  c.position[0] += dx
+  c.position[1] += dy
+  c.position[2] += dz
+}
+
 func mainLoop(screen *Screen, resources *Resources,
               renderer *sdl.Renderer, texture *sdl.Texture) {
-
-
-
 	running := true
+  var input Input
+  input.Init()
+  keyStates := []*KeyState{&input.forward, &input.backward,
+      &input.left, &input.right, &input.up, &input.down}
+
+  var camera Camera
+  camera.Init()
+
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-      switch event.(type) {
+      switch e:= event.(type) {
       case *sdl.QuitEvent:
         running = false
         break
+      case *sdl.KeyboardEvent:
+        for _, keystate := range keyStates {
+          if keystate.scancode == e.Keysym.Scancode {
+            keystate.held = e.Type == sdl.KEYDOWN
+          }
+        }
       }
 		}
+
+    // update camera
+    camera.Update(&input)
 
     // clear buffers
     for i := int32(0); i < screen.height * screen.width; i++ {
@@ -117,7 +192,7 @@ func mainLoop(screen *Screen, resources *Resources,
       screen.depthbuffer[i] = 0
     }
 
-    Draw(screen, resources)
+    Draw(screen, resources, &camera)
 
 
     pixels, _, err := texture.Lock(nil)
@@ -145,14 +220,15 @@ func mainLoop(screen *Screen, resources *Resources,
 	}
 }
 
-func Draw(screen *Screen, resources *Resources) {
+func Draw(screen *Screen, resources *Resources, camera *Camera) {
   mesh := resources.obj.Objects[0]
   // Each face consists of 3 vertices
   modelVerts := resources.obj.Vertices
 
 
   center := vec3.Vec3{0,0,0}
-  cameraPosition := vec3.Vec3{.3, 0, 3}
+  cameraPosition := camera.position
+  fmt.Println(cameraPosition)
 
   camTrans := mat4.Translation(center.Sub(cameraPosition))
 
@@ -178,7 +254,7 @@ func Draw(screen *Screen, resources *Resources) {
     v3 = v3_homo.Wdivide();
 
 
-    v1Screen := vec3.Vec3{
+    v1Screen := vec3.Vec3 {
       (v1[0] + 1.0) * float32(screen.width) / 2.0,
       (v1[1] + 1.0) * float32(screen.height) / 2.0,
       (v1[2] + 1.0) * float32(screen.depth) / 2.0,
@@ -242,7 +318,7 @@ func drawTriangle(screen *Screen, v1, v2, v3, normal,
           b := baricenter(vec3.Vec3{float32(x),float32(y),1}, v1, v2, v3)
           if pointInTriangle(b) {
             pointz := v1[2] * b[0] + v2[2] * b [1] + v3[2] * b[2]
-            fmt.Printf("pointz: %v\n", pointz)
+            //fmt.Printf("pointz: %v\n", pointz)
             depthIndex := int32(x) + int32(y) * screen.width
 
             if pointz > screen.depthbuffer[depthIndex] {
