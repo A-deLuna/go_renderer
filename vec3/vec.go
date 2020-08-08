@@ -1,6 +1,9 @@
 package vec3
 
-import "math"
+import (
+  "math"
+  "fmt"
+)
 
 type Vec3 []float32
 
@@ -22,6 +25,9 @@ func Cross(a Vec3, b Vec3) Vec3 {
              a[0] * b[1] - a[1] * b[0]}
 }
 
+func (v Vec3) String() string {
+  return fmt.Sprintf("{x: %f, y:%f, z:%f}", v[0],v[1],v[2])
+}
 
 func Normalize(a Vec3) Vec3 {
   norm := float32(math.Sqrt(float64(Dot(a, a))))

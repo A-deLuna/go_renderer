@@ -94,13 +94,17 @@ func Rotation(x,y,z float64) Mat4 {
 
 func Projection(n, f float32, fov float64) Mat4 {
 
-  s:= float32(1/ math.Tan((fov / 2.0) * (math.Pi / 180.0)))
+  fustrum := n * float32(math.Tan(fov * (math.Pi / 180.0 * .5)))
+  l := -fustrum
+  r := fustrum
+  b := -fustrum
+  t := fustrum
 
   return Mat4 {
-    {s, 0, 0, 0},
-    {0, s, 0, 0},
-    {0, 0, -(f/(f-n)), -1},
-    {0, 0, -((f*n)/(f-n)), 0},
+    {(2*n)/(r-l), 0, 0, 0},
+    {0, (2*n)/(t-b), 0, 0},
+    {(r+l)/(r-l), (t+b)/(t-b), -((f+n)/(f-n)), -1},
+    {0, 0, -((2*f*n)/(f-n)), 0},
   }
 }
 

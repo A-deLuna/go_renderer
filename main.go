@@ -128,7 +128,7 @@ func mainLoop(screen *Screen, resources *Resources,
 		// clear buffers
 		for i := int32(0); i < screen.height*screen.width; i++ {
 			screen.framebuffer[i] = Color{0, 0, 0, 0}
-			screen.depthbuffer[i] = 0
+			screen.depthbuffer[i] = screen.depth * 2
 		}
 
 		Draw(screen, resources, &camera)
@@ -154,6 +154,7 @@ func mainLoop(screen *Screen, resources *Resources,
 		}
 
 		renderer.Present()
+    //panic("wow")
 
 	}
 }
@@ -166,36 +167,36 @@ func Draw(screen *Screen, resources *Resources, camera *Camera) {
 	vp := camera.VP()
 
 	for _, face := range mesh.Faces {
-		v1 := toVec(modelVerts, face.Vertices[0]*3)
-		v2 := toVec(modelVerts, face.Vertices[1]*3)
-		v3 := toVec(modelVerts, face.Vertices[2]*3)
+		v1Orig := toVec(modelVerts, face.Vertices[0]*3)
+		v2Orig := toVec(modelVerts, face.Vertices[1]*3)
+		v3Orig := toVec(modelVerts, face.Vertices[2]*3)
 
-		v1_homo := mat4.VectorMultiply(vp, vec4.FromVec3(v1))
-		v2_homo := mat4.VectorMultiply(vp, vec4.FromVec3(v2))
-		v3_homo := mat4.VectorMultiply(vp, vec4.FromVec3(v3))
+		v1_homo := mat4.VectorMultiply(vp, vec4.FromVec3(v1Orig))
+		v2_homo := mat4.VectorMultiply(vp, vec4.FromVec3(v2Orig))
+		v3_homo := mat4.VectorMultiply(vp, vec4.FromVec3(v3Orig))
 
 		if shouldClip(v1_homo, v2_homo, v3_homo) {
 			continue
 		}
 
-		v1 = v1_homo.Wdivide()
-		v2 = v2_homo.Wdivide()
-		v3 = v3_homo.Wdivide()
+    v1 := v1_homo.Wdivide()
+    v2 := v2_homo.Wdivide()
+    v3 := v3_homo.Wdivide()
 
 		v1Screen := vec3.Vec3{
 			(v1[0] + 1.0) * float32(screen.width) / 2.0,
 			(v1[1] + 1.0) * float32(screen.height) / 2.0,
-			(v1[2] + 1.0) * float32(screen.depth) / 2.0,
+			(v1[2]) * float32(screen.depth),
 		}
 		v2Screen := vec3.Vec3{
 			(v2[0] + 1.0) * float32(screen.width) / 2.0,
 			(v2[1] + 1.0) * float32(screen.height) / 2.0,
-			(v2[2] + 1.0) * float32(screen.depth) / 2.0,
+			(v2[2]) * float32(screen.depth),
 		}
 		v3Screen := vec3.Vec3{
 			(v3[0] + 1.0) * float32(screen.width) / 2.0,
 			(v3[1] + 1.0) * float32(screen.height) / 2.0,
-			(v3[2] + 1.0) * float32(screen.depth) / 2.0,
+			(v3[2]) * float32(screen.depth),
 		}
 
 		normal := vec3.Normalize(vec3.Cross(v3.Sub(v1), v2.Sub(v1)))
@@ -204,7 +205,7 @@ func Draw(screen *Screen, resources *Resources, camera *Camera) {
 		tex2 := toVec2(resources.obj.Uvs, face.Uvs[1]*2)
 		tex3 := toVec2(resources.obj.Uvs, face.Uvs[2]*2)
 
-		drawTriangle(screen, v1Screen, v2Screen, v3Screen, normal, tex1, tex2, tex3,
+		drawTriangle(screen, v1_homo, v2_homo, v3_homo, v1Orig, v2Orig, v3Orig, v1Screen, v2Screen, v3Screen, normal, tex1, tex2, tex3,
 			resources.image)
 
 	}
@@ -230,7 +231,7 @@ type Box struct {
 	maxy float32
 }
 
-func drawTriangle(screen *Screen, v1, v2, v3, normal,
+func drawTriangle(screen *Screen, v1Homo,v2Homo,v3Homo vec4.Vec4, v1Orig,v2Orig,v3Orig,v1, v2, v3, normal,
 	t1, t2, t3 vec3.Vec3, image image.Image) {
 	box := boundingBox(v1, v2, v3)
 	lightDir := vec3.Vec3{0, 0, 1}
@@ -247,8 +248,7 @@ func drawTriangle(screen *Screen, v1, v2, v3, normal,
 				pointz := v1[2]*b[0] + v2[2]*b[1] + v3[2]*b[2]
 				//fmt.Printf("pointz: %v\n", pointz)
 				depthIndex := int32(x) + int32(y)*screen.width
-
-				if pointz > screen.depthbuffer[depthIndex] {
+				if pointz < screen.depthbuffer[depthIndex] {
 					screen.depthbuffer[depthIndex] = pointz
 					textureCoords := vec3.Add(
 						vec3.Scale(t1, b[0]),
@@ -259,6 +259,7 @@ func drawTriangle(screen *Screen, v1, v2, v3, normal,
 						int((1.0 - textureCoords[1]) * float32(image.Bounds().Dy()))}
 					color := image.At(screenTexCoords[0], screenTexCoords[1])
 					r, g, b, a := color.RGBA()
+
 					screen.framebuffer[int32(x)+int32(y)*screen.width] =
 						Color{byte(a), byte(b), byte(g), byte(r)}
 				}
