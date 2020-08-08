@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"github.com/a-deluna/gorenderer/v2/mat4"
 	"github.com/a-deluna/gorenderer/v2/vec3"
 	"github.com/a-deluna/gorenderer/v2/vec4"
@@ -123,6 +123,8 @@ func mainLoop(screen *Screen, resources *Resources,
 			}
 		}
 
+    msAtStart := sdl.GetTicks()
+
 		camera.Update(&input)
 
 		// clear buffers
@@ -155,7 +157,9 @@ func mainLoop(screen *Screen, resources *Resources,
 
 		renderer.Present()
     //panic("wow")
-
+    msAtEnd := sdl.GetTicks()
+    difference := msAtEnd-msAtStart
+    fmt.Printf("Time: %d ms\n",difference)
 	}
 }
 
