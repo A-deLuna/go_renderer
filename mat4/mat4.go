@@ -53,6 +53,14 @@ func Translation(v vec3.Vec3) Mat4 {
   }
 }
 
+func Transpose (a Mat4) (out Mat4) {
+  out[0][0] = a[0][0]; out[0][1] = a[1][0]; out[0][2] = a[2][0]; out[0][3] = a[3][0];
+  out[1][0] = a[0][1]; out[1][1] = a[1][1]; out[1][2] = a[2][1]; out[1][3] = a[3][1];
+  out[2][0] = a[0][2]; out[2][1] = a[1][2]; out[2][2] = a[2][2]; out[2][3] = a[3][2];
+  out[3][0] = a[0][3]; out[3][1] = a[1][3]; out[3][2] = a[2][3]; out[3][3] = a[3][3];
+  return
+}
+
 func Rotation(x,y,z float64) Mat4 {
   sinx := float32(math.Sin(x))
   cosx := float32(math.Cos(x))
