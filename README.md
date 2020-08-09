@@ -47,4 +47,6 @@ average frame render time was 140ms
 
 The parallel version averages 40ms per frame! 
 
-https://youtu.be/gmkmSekyO1k
+![](go_renderer.gif)
+
+Youtube: https://youtu.be/gmkmSekyO1k
