@@ -1,8 +1,9 @@
 package main
 
-import(
+import (
 	"github.com/a-deluna/gorenderer/v2/vec3"
 )
+
 type Box struct {
 	minx float32
 	miny float32

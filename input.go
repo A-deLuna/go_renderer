@@ -28,7 +28,6 @@ type MouseInput struct {
 	dx, dy float32
 }
 
-
 func (i *Input) Init() {
 	i.keyboard.forward = KeyState{sdl.SCANCODE_W, false}
 	i.keyboard.backward = KeyState{sdl.SCANCODE_S, false}
@@ -39,12 +38,11 @@ func (i *Input) Init() {
 }
 
 func (i *Input) KeyStates() []*KeyState {
-return []*KeyState{&i.keyboard.forward,
-    &i.keyboard.backward,
+	return []*KeyState{&i.keyboard.forward,
+		&i.keyboard.backward,
 		&i.keyboard.left,
-    &i.keyboard.right,
-    &i.keyboard.up,
-    &i.keyboard.down}
+		&i.keyboard.right,
+		&i.keyboard.up,
+		&i.keyboard.down}
 
 }
-

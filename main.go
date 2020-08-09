@@ -23,8 +23,8 @@ type Screen struct {
 	depth       float32
 	framebuffer []Color
 	depthbuffer []float32
-  tileSize    int32
-  tileCount    int32
+	tileSize    int32
+	tileCount   int32
 }
 
 type Color struct {
@@ -83,13 +83,13 @@ func main() {
 	}
 	defer texture.Destroy()
 
-  tileSize:= int32(16)
-  tileCount := width /tileSize * height/tileSize
+	tileSize := int32(16)
+	tileCount := width / tileSize * height / tileSize
 	bufferSize := width * height * 4
 	screen := Screen{width: width, height: height, depth: 10000,
 		framebuffer: make([]Color, bufferSize),
 		depthbuffer: make([]float32, bufferSize),
-    tileSize: tileSize, tileCount: tileCount }
+		tileSize:    tileSize, tileCount: tileCount}
 
 	mainLoop(&screen, &resources, renderer, texture)
 }
@@ -101,26 +101,26 @@ func mainLoop(screen *Screen, resources *Resources,
 	input.Init()
 	keyStates := input.KeyStates()
 	var camera Camera
-  camera.Init()
+	camera.Init()
 
-  graphController := NewGraphController(screen.tileCount)
-  completion := make(chan bool, screen.tileCount)
+	graphController := NewGraphController(screen.tileCount)
+	completion := make(chan bool, screen.tileCount)
 
-  for i := int32(0); i < screen.tileCount; i++ {
-    graphStateChannel := make(chan GraphState)
-    drawCommandsChannel := make(chan *DrawCommand, 100)
-    graphController.AddTileChans(graphStateChannel, drawCommandsChannel)
+	for i := int32(0); i < screen.tileCount; i++ {
+		graphStateChannel := make(chan GraphState)
+		drawCommandsChannel := make(chan *DrawCommand, 100)
+		graphController.AddTileChans(graphStateChannel, drawCommandsChannel)
 
-    tr := TileRenderer{
-      screen:screen,
-      resources: resources,
-      id: i,
-      drawCommandsChannel : drawCommandsChannel,
-      graphStateChannel : graphStateChannel,
-      completion: completion }
+		tr := TileRenderer{
+			screen:              screen,
+			resources:           resources,
+			id:                  i,
+			drawCommandsChannel: drawCommandsChannel,
+			graphStateChannel:   graphStateChannel,
+			completion:          completion}
 
-    go tr.Render()
-  }
+		go tr.Render()
+	}
 
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -146,7 +146,7 @@ func mainLoop(screen *Screen, resources *Resources,
 			}
 		}
 
-    msAtStart := sdl.GetTicks()
+		msAtStart := sdl.GetTicks()
 
 		camera.Update(&input)
 
@@ -158,11 +158,11 @@ func mainLoop(screen *Screen, resources *Resources,
 
 		Draw(screen, resources, &camera, &graphController)
 
-    completionCount := int32(0)
-    for completionCount < screen.tileCount {
-      <-completion
-      completionCount++
-    }
+		completionCount := int32(0)
+		for completionCount < screen.tileCount {
+			<-completion
+			completionCount++
+		}
 
 		pixels, _, err := texture.Lock(nil)
 		if err != nil {
@@ -185,23 +185,23 @@ func mainLoop(screen *Screen, resources *Resources,
 		}
 
 		renderer.Present()
-    //panic("wow")
-    msAtEnd := sdl.GetTicks()
-    difference := msAtEnd-msAtStart
-    fmt.Printf("Time: %d ms\n",difference)
+		//panic("wow")
+		msAtEnd := sdl.GetTicks()
+		difference := msAtEnd - msAtStart
+		fmt.Printf("Time: %d ms\n", difference)
 	}
 }
 
 func Draw(screen *Screen, resources *Resources, camera *Camera,
-          graphController *GraphController) {
+	graphController *GraphController) {
 	mesh := resources.obj.Objects[0]
 	// Each face consists of 3 vertices
 	modelVerts := resources.obj.Vertices
 
 	vp := camera.VP()
 
-  //fmt.Printf("setting state to running\n")
-  graphController.ChangeState(RUNNING)
+	//fmt.Printf("setting state to running\n")
+	graphController.ChangeState(RUNNING)
 
 	for _, face := range mesh.Faces {
 		v1Orig := toVec(modelVerts, face.Vertices[0]*3)
@@ -216,9 +216,9 @@ func Draw(screen *Screen, resources *Resources, camera *Camera,
 			continue
 		}
 
-    v1 := v1_homo.Wdivide()
-    v2 := v2_homo.Wdivide()
-    v3 := v3_homo.Wdivide()
+		v1 := v1_homo.Wdivide()
+		v2 := v2_homo.Wdivide()
+		v3 := v3_homo.Wdivide()
 
 		v1Screen := vec3.Vec3{
 			(v1[0] + 1.0) * float32(screen.width) / 2.0,
@@ -242,47 +242,46 @@ func Draw(screen *Screen, resources *Resources, camera *Camera,
 		t2 := toVec2(resources.obj.Uvs, face.Uvs[1]*2)
 		t3 := toVec2(resources.obj.Uvs, face.Uvs[2]*2)
 
-    lightDir := vec3.Vec3{0,0,1}
-    magnitude := -vec3.Dot(lightDir,normal)
-    if magnitude < 0 {
-      continue
-    }
+		lightDir := vec3.Vec3{0, 0, 1}
+		magnitude := -vec3.Dot(lightDir, normal)
+		if magnitude < 0 {
+			continue
+		}
 
+		box := boundingBox(v1Screen, v2Screen, v3Screen)
 
-   box := boundingBox(v1Screen, v2Screen, v3Screen)
-
-   dc := DrawCommand{v1Screen,v2Screen,v3Screen,t1,t2,t3}
-   tilesIds := getTileIds(screen, &box)
-   for _, id := range tilesIds {
-     //fmt.Printf("sending draw command to %d\n", id)
-     graphController.NotifyTile(id, &dc)
-   }
+		dc := DrawCommand{v1Screen, v2Screen, v3Screen, t1, t2, t3}
+		tilesIds := getTileIds(screen, &box)
+		for _, id := range tilesIds {
+			//fmt.Printf("sending draw command to %d\n", id)
+			graphController.NotifyTile(id, &dc)
+		}
 
 	}
-  graphController.ChangeState(DONE)
+	graphController.ChangeState(DONE)
 }
 
 func getTileIds(screen *Screen, box *Box) []int32 {
-  mask := screen.tileSize-1
-  tilesPerRow := screen.width / screen.tileSize
+	mask := screen.tileSize - 1
+	tilesPerRow := screen.width / screen.tileSize
 
-  minx := (int32(box.minx) & ^mask) / screen.tileSize
-  miny := (int32(box.miny) & ^mask) / screen.tileSize
-  maxx := (int32(box.maxx) & ^mask) / screen.tileSize
-  maxy := (int32(box.maxy) & ^mask) / screen.tileSize
+	minx := (int32(box.minx) & ^mask) / screen.tileSize
+	miny := (int32(box.miny) & ^mask) / screen.tileSize
+	maxx := (int32(box.maxx) & ^mask) / screen.tileSize
+	maxy := (int32(box.maxy) & ^mask) / screen.tileSize
 
-  list := make([]int32, 0)
-  for x := minx; x <= maxx; x++ {
-    for y := miny; y <= maxy; y++ {
-      id := x + tilesPerRow * y
-      list = append(list, id)
-    }
-  }
-  //fmt.Printf("box: %#v\n", box)
-  //fmt.Printf("mask: %d minx: %d miny: %d maxx: %d maxy: %d\n",
-  //          mask,minx,miny,maxx,maxy)
-  //fmt.Printf("list: %v\n", list)
-  return list
+	list := make([]int32, 0)
+	for x := minx; x <= maxx; x++ {
+		for y := miny; y <= maxy; y++ {
+			id := x + tilesPerRow*y
+			list = append(list, id)
+		}
+	}
+	//fmt.Printf("box: %#v\n", box)
+	//fmt.Printf("mask: %d minx: %d miny: %d maxx: %d maxy: %d\n",
+	//          mask,minx,miny,maxx,maxy)
+	//fmt.Printf("list: %v\n", list)
+	return list
 }
 
 func shouldClip(vectors ...vec4.Vec4) bool {
@@ -297,4 +296,3 @@ func shouldClip(vectors ...vec4.Vec4) bool {
 	}
 	return false
 }
-

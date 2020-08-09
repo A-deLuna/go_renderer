@@ -1,6 +1,6 @@
 package main
 
-import(
+import (
 	"github.com/a-deluna/gorenderer/v2/mat4"
 	"github.com/a-deluna/gorenderer/v2/vec3"
 	"github.com/a-deluna/gorenderer/v2/vec4"
@@ -17,8 +17,8 @@ func (c *Camera) Init() {
 }
 
 func (c *Camera) Update(input *Input) {
-  v := vec4.Vec4{0,0,0,0}
-  delta := float32(.15)
+	v := vec4.Vec4{0, 0, 0, 0}
+	delta := float32(.15)
 	if input.keyboard.forward.held && !input.keyboard.backward.held {
 		v[2] = -delta
 	}
@@ -37,8 +37,8 @@ func (c *Camera) Update(input *Input) {
 	if input.keyboard.up.held && !input.keyboard.down.held {
 		v[1] = -delta
 	}
-  rotation := mat4.Rotation(float64(c.pitch), float64(c.yaw), 0)
-  v = mat4.VectorMultiply(rotation, v)
+	rotation := mat4.Rotation(float64(c.pitch), float64(c.yaw), 0)
+	v = mat4.VectorMultiply(rotation, v)
 
 	c.position[0] += v[0]
 	c.position[1] += v[1]
@@ -56,10 +56,10 @@ func (c *Camera) VP() mat4.Mat4 {
 	trans := mat4.Translation(center.Sub(c.position))
 	rot := mat4.Transpose(mat4.Rotation(float64(c.pitch), float64(c.yaw), 0))
 
-  var near float32 = 1
-  var far float32  = 10
-  var fov float64 =  30
-	projection := mat4.Projection(near,far,fov)
+	var near float32 = 1
+	var far float32 = 10
+	var fov float64 = 30
+	projection := mat4.Projection(near, far, fov)
 
-  return mat4.Multiply(projection, mat4.Multiply(rot, trans))
+	return mat4.Multiply(projection, mat4.Multiply(rot, trans))
 }
