@@ -99,6 +99,9 @@ func mainLoop(screen *Screen, resources *Resources,
 
 	running := true
 	for running {
+
+		simulation.input.mouse.dx = 0
+		simulation.input.mouse.dy = 0
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch e := event.(type) {
 			case *sdl.QuitEvent:
