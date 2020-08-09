@@ -23,10 +23,6 @@ func toVec2(verts []float32, base int) vec3.Vec3 {
 	return vec3.Vec3{verts[base], verts[base+1], 0}
 }
 
-func toVec(verts []float32, base int) vec3.Vec3 {
-	return vec3.Vec3{verts[base], verts[base+1], verts[base+2]}
-}
-
 func min(a, b float32) float32 {
 	if a < b {
 		return a

@@ -12,8 +12,9 @@ type Camera struct {
 	pitch    float32
 }
 
-func (c *Camera) Init() {
+func NewCamera() (c Camera) {
 	c.position = vec3.Vec3{0, 0, 2}
+	return
 }
 
 func (c *Camera) Update(input *Input) {
