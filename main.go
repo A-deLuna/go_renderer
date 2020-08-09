@@ -23,6 +23,8 @@ type Screen struct {
 	depth       float32
 	framebuffer []Color
 	depthbuffer []float32
+  tileSize    int32
+  tileCount    int32
 }
 
 type Color struct {
@@ -81,14 +83,16 @@ func main() {
 	}
 	defer texture.Destroy()
 
+  tileSize:= int32(16)
+  tileCount := width /tileSize * height/tileSize
 	bufferSize := width * height * 4
 	screen := Screen{width: width, height: height, depth: 10000,
 		framebuffer: make([]Color, bufferSize),
-		depthbuffer: make([]float32, bufferSize)}
+		depthbuffer: make([]float32, bufferSize),
+    tileSize: tileSize, tileCount: tileCount }
 
 	mainLoop(&screen, &resources, renderer, texture)
 }
-
 
 func mainLoop(screen *Screen, resources *Resources,
 	renderer *sdl.Renderer, texture *sdl.Texture) {
@@ -97,7 +101,26 @@ func mainLoop(screen *Screen, resources *Resources,
 	input.Init()
 	keyStates := input.KeyStates()
 	var camera Camera
-	camera.Init()
+  camera.Init()
+
+  graphController := NewGraphController(screen.tileCount)
+  completion := make(chan bool, screen.tileCount)
+
+  for i := int32(0); i < screen.tileCount; i++ {
+    graphStateChannel := make(chan GraphState)
+    drawCommandsChannel := make(chan *DrawCommand, 100)
+    graphController.AddTileChans(graphStateChannel, drawCommandsChannel)
+
+    tr := TileRenderer{
+      screen:screen,
+      resources: resources,
+      id: i,
+      drawCommandsChannel : drawCommandsChannel,
+      graphStateChannel : graphStateChannel,
+      completion: completion }
+
+    go tr.Render()
+  }
 
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -133,7 +156,13 @@ func mainLoop(screen *Screen, resources *Resources,
 			screen.depthbuffer[i] = screen.depth * 2
 		}
 
-		Draw(screen, resources, &camera)
+		Draw(screen, resources, &camera, &graphController)
+
+    completionCount := int32(0)
+    for completionCount < screen.tileCount {
+      <-completion
+      completionCount++
+    }
 
 		pixels, _, err := texture.Lock(nil)
 		if err != nil {
@@ -163,12 +192,16 @@ func mainLoop(screen *Screen, resources *Resources,
 	}
 }
 
-func Draw(screen *Screen, resources *Resources, camera *Camera) {
+func Draw(screen *Screen, resources *Resources, camera *Camera,
+          graphController *GraphController) {
 	mesh := resources.obj.Objects[0]
 	// Each face consists of 3 vertices
 	modelVerts := resources.obj.Vertices
 
 	vp := camera.VP()
+
+  //fmt.Printf("setting state to running\n")
+  graphController.ChangeState(RUNNING)
 
 	for _, face := range mesh.Faces {
 		v1Orig := toVec(modelVerts, face.Vertices[0]*3)
@@ -205,14 +238,51 @@ func Draw(screen *Screen, resources *Resources, camera *Camera) {
 
 		normal := vec3.Normalize(vec3.Cross(v3.Sub(v1), v2.Sub(v1)))
 
-		tex1 := toVec2(resources.obj.Uvs, face.Uvs[0]*2)
-		tex2 := toVec2(resources.obj.Uvs, face.Uvs[1]*2)
-		tex3 := toVec2(resources.obj.Uvs, face.Uvs[2]*2)
+		t1 := toVec2(resources.obj.Uvs, face.Uvs[0]*2)
+		t2 := toVec2(resources.obj.Uvs, face.Uvs[1]*2)
+		t3 := toVec2(resources.obj.Uvs, face.Uvs[2]*2)
 
-		drawTriangle(screen, v1_homo, v2_homo, v3_homo, v1Orig, v2Orig, v3Orig, v1Screen, v2Screen, v3Screen, normal, tex1, tex2, tex3,
-			resources.image)
+    lightDir := vec3.Vec3{0,0,1}
+    magnitude := -vec3.Dot(lightDir,normal)
+    if magnitude < 0 {
+      continue
+    }
+
+
+   box := boundingBox(v1Screen, v2Screen, v3Screen)
+
+   dc := DrawCommand{v1Screen,v2Screen,v3Screen,t1,t2,t3}
+   tilesIds := getTileIds(screen, &box)
+   for _, id := range tilesIds {
+     //fmt.Printf("sending draw command to %d\n", id)
+     graphController.NotifyTile(id, &dc)
+   }
 
 	}
+  graphController.ChangeState(DONE)
+}
+
+func getTileIds(screen *Screen, box *Box) []int32 {
+  mask := screen.tileSize-1
+  tilesPerRow := screen.width / screen.tileSize
+
+  minx := (int32(box.minx) & ^mask) / screen.tileSize
+  miny := (int32(box.miny) & ^mask) / screen.tileSize
+  maxx := (int32(box.maxx) & ^mask) / screen.tileSize
+  maxy := (int32(box.maxy) & ^mask) / screen.tileSize
+
+  list := make([]int32, 0)
+  for x := minx; x <= maxx; x++ {
+    for y := miny; y <= maxy; y++ {
+      id := x + tilesPerRow * y
+      list = append(list, id)
+    }
+  }
+  //fmt.Printf("box: %#v\n", box)
+  //fmt.Printf("mask: %d minx: %d miny: %d maxx: %d maxy: %d\n",
+  //          mask,minx,miny,maxx,maxy)
+  //fmt.Printf("list: %v\n", list)
+  return list
 }
 
 func shouldClip(vectors ...vec4.Vec4) bool {
@@ -228,96 +298,3 @@ func shouldClip(vectors ...vec4.Vec4) bool {
 	return false
 }
 
-type Box struct {
-	minx float32
-	miny float32
-	maxx float32
-	maxy float32
-}
-
-func drawTriangle(screen *Screen, v1Homo,v2Homo,v3Homo vec4.Vec4, v1Orig,v2Orig,v3Orig,v1, v2, v3, normal,
-	t1, t2, t3 vec3.Vec3, image image.Image) {
-	box := boundingBox(v1, v2, v3)
-	lightDir := vec3.Vec3{0, 0, 1}
-
-	magnitude := -vec3.Dot(lightDir, normal)
-	if magnitude < 0 {
-		return
-	}
-
-	for y := int(box.miny); y <= int(box.maxy); y++ {
-		for x := int(box.minx); x <= int(box.maxx); x++ {
-			b := baricenter(vec3.Vec3{float32(x), float32(y), 1}, v1, v2, v3)
-			if pointInTriangle(b) {
-				pointz := v1[2]*b[0] + v2[2]*b[1] + v3[2]*b[2]
-				//fmt.Printf("pointz: %v\n", pointz)
-				depthIndex := int32(x) + int32(y)*screen.width
-				if pointz < screen.depthbuffer[depthIndex] {
-					screen.depthbuffer[depthIndex] = pointz
-					textureCoords := vec3.Add(
-						vec3.Scale(t1, b[0]),
-						vec3.Scale(t2, b[1]),
-						vec3.Scale(t3, b[2]))
-					screenTexCoords := []int{
-						int(textureCoords[0] * float32(image.Bounds().Dx())),
-						int((1.0 - textureCoords[1]) * float32(image.Bounds().Dy()))}
-					color := image.At(screenTexCoords[0], screenTexCoords[1])
-					r, g, b, a := color.RGBA()
-
-					screen.framebuffer[int32(x)+int32(y)*screen.width] =
-						Color{byte(a), byte(b), byte(g), byte(r)}
-				}
-			}
-		}
-	}
-}
-
-func baricenter(p, v1, v2, v3 vec3.Vec3) vec3.Vec3 {
-	v31 := v1.Sub(v3)
-	v32 := v2.Sub(v3)
-	pv3 := v3.Sub(p)
-
-	x := vec3.Vec3{v31[0], v32[0], pv3[0]}
-	y := vec3.Vec3{v31[1], v32[1], pv3[1]}
-
-	cross := vec3.Cross(x, y)
-
-	u := cross[0] / cross[2]
-	v := cross[1] / cross[2]
-
-	return vec3.Vec3{u, v, 1.0 - u - v}
-}
-
-func pointInTriangle(baricenter vec3.Vec3) bool {
-	return baricenter[0] >= 0 && baricenter[1] >= 0 &&
-		baricenter[0]+baricenter[1] <= 1.0
-}
-
-func boundingBox(v1, v2, v3 vec3.Vec3) Box {
-	minx := min(v1[0], min(v2[0], v3[0]))
-	miny := min(v1[1], min(v2[1], v3[1]))
-	maxx := max(v1[0], max(v2[0], v3[0]))
-	maxy := max(v1[1], max(v2[1], v3[1]))
-	return Box{minx, miny, maxx, maxy}
-}
-func toVec2(verts []float32, base int) vec3.Vec3 {
-	return vec3.Vec3{verts[base], verts[base+1], 0}
-}
-
-func toVec(verts []float32, base int) vec3.Vec3 {
-	return vec3.Vec3{verts[base], verts[base+1], verts[base+2]}
-}
-
-func min(a, b float32) float32 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b float32) float32 {
-	if a > b {
-		return a
-	}
-	return b
-}
