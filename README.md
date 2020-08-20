@@ -47,6 +47,8 @@ average frame render time was 140ms
 
 The parallel version averages 40ms per frame! 
 
+I keep the quality of the gif down to improve load speed, see the video for beter quality.
+
 ![](go_renderer.gif)
 
 Youtube: https://youtu.be/gmkmSekyO1k
